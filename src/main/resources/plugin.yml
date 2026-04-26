@@ -1,0 +1,12 @@
+name: NoBanedItem
+version: 1.0.0
+main: org.system.nobanedItem.NoBanedItem
+api-version: 1.20
+commands:
+  bi:
+    description: Main command for NoBanedItem plugin
+    usage: /bi <itemadd|adminadd> [player]
+permissions:
+  nobaneditem.admin:
+    description: Allows access to admin commands
+    default: op
