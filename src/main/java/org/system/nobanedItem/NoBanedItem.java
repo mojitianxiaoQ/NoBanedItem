@@ -1,10 +1,13 @@
 package org.system.nobanedItem;
 
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 public class NoBanedItem extends JavaPlugin {
 
@@ -13,20 +16,21 @@ public class NoBanedItem extends JavaPlugin {
     private File adminFile;
     private YamlConfiguration adminConfig;
 
+    private final Set<String> bannedItemsCache = new HashSet<>();
+    private final Set<String> adminsCache = new HashSet<>();
+
     @Override
     public void onEnable() {
-        // 创建插件配置目录
         if (!getDataFolder().exists()) {
             getDataFolder().mkdir();
         }
 
-        // 初始化配置文件
         initializeConfigFiles();
+        loadCaches();
 
-        // 注册命令执行器
         getCommand("bi").setExecutor(new BiCommand(this));
+        getCommand("bi").setTabCompleter(new BiTabCompleter(this));
 
-        // 注册事件监听器
         getServer().getPluginManager().registerEvents(new ItemProtectionListener(this), this);
 
         getLogger().info("NoBanedItem 插件已启用！");
@@ -38,7 +42,6 @@ public class NoBanedItem extends JavaPlugin {
     }
 
     private void initializeConfigFiles() {
-        // 创建 BanedItem.yml
         banedItemFile = new File(getDataFolder(), "BanedItem.yml");
         if (!banedItemFile.exists()) {
             try {
@@ -49,7 +52,6 @@ public class NoBanedItem extends JavaPlugin {
         }
         banedItemConfig = YamlConfiguration.loadConfiguration(banedItemFile);
 
-        // 创建 admin.yml
         adminFile = new File(getDataFolder(), "admin.yml");
         if (!adminFile.exists()) {
             try {
@@ -59,6 +61,35 @@ public class NoBanedItem extends JavaPlugin {
             }
         }
         adminConfig = YamlConfiguration.loadConfiguration(adminFile);
+    }
+
+    private void loadCaches() {
+        bannedItemsCache.clear();
+        List<String> bannedItems = banedItemConfig.getStringList("banned_items");
+        bannedItemsCache.addAll(bannedItems);
+
+        adminsCache.clear();
+        for (String key : adminConfig.getKeys(false)) {
+            if (adminConfig.getBoolean(key, false)) {
+                adminsCache.add(key.toLowerCase());
+            }
+        }
+
+        getLogger().info("已加载 " + bannedItemsCache.size() + " 个禁用物品, " + adminsCache.size() + " 个管理员");
+    }
+
+    public void reloadConfigs() {
+        banedItemConfig = YamlConfiguration.loadConfiguration(banedItemFile);
+        adminConfig = YamlConfiguration.loadConfiguration(adminFile);
+        loadCaches();
+    }
+
+    public Set<String> getBannedItemsCache() {
+        return Collections.unmodifiableSet(bannedItemsCache);
+    }
+
+    public Set<String> getAdminsCache() {
+        return Collections.unmodifiableSet(adminsCache);
     }
 
     public YamlConfiguration getBanedItemConfig() {
@@ -93,17 +124,44 @@ public class NoBanedItem extends JavaPlugin {
         }
     }
 
+    public boolean isBannedItem(String materialName) {
+        return bannedItemsCache.contains(materialName);
+    }
+
+    public void addBannedItem(String materialName) {
+        List<String> bannedItems = banedItemConfig.getStringList("banned_items");
+        if (!bannedItems.contains(materialName)) {
+            bannedItems.add(materialName);
+            banedItemConfig.set("banned_items", bannedItems);
+            saveBanedItemConfig();
+            bannedItemsCache.add(materialName);
+        }
+    }
+
+    public void removeBannedItem(String materialName) {
+        List<String> bannedItems = banedItemConfig.getStringList("banned_items");
+        if (bannedItems.remove(materialName)) {
+            banedItemConfig.set("banned_items", bannedItems);
+            saveBanedItemConfig();
+            bannedItemsCache.remove(materialName);
+        }
+    }
+
     public boolean isAdmin(String playerName) {
-        return adminConfig.getBoolean(playerName.toLowerCase(), false);
+        return adminsCache.contains(playerName.toLowerCase());
     }
 
     public void addAdmin(String playerName) {
-        adminConfig.set(playerName.toLowerCase(), true);
+        String lowerName = playerName.toLowerCase();
+        adminConfig.set(lowerName, true);
         saveAdminConfig();
+        adminsCache.add(lowerName);
     }
 
     public void removeAdmin(String playerName) {
-        adminConfig.set(playerName.toLowerCase(), false);
+        String lowerName = playerName.toLowerCase();
+        adminConfig.set(lowerName, false);
         saveAdminConfig();
+        adminsCache.remove(lowerName);
     }
 }
